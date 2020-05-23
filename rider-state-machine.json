@@ -1,0 +1,75 @@
+{
+  "Comment": "Riders photo processing workflow",
+  "StartAt": "FaceDetection",
+  "States": {
+    "FaceDetection": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:908425369328:function:wildrydes-step-module-resour-FaceDetectionFunction-108KPSC88EFHI",
+      "ResultPath": "$.detectedFaceDetails",
+      "Next": "CheckFaceDuplicate",
+      "Catch": [
+        {
+          "ErrorEquals": ["PhotoInvalid"],
+          "ResultPath": "$.errorInfo",
+          "Next": "PhotoInvalid"
+        }
+      ]
+    },
+    "PhotoInvalid": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+          "TopicArn": "arn:aws:sns:us-east-1:908425369328:NotifyMe",
+          "Subject": "Non-compliant photo uploaded",
+          "Message.$": "$"
+      },
+      "End": true
+    },
+    "CheckFaceDuplicate": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:908425369328:function:wildrydes-step-module-resources-FaceSearchFunction-1UVU8ZR64OZU0",
+      "ResultPath": null,
+      "Next": "ParallelProcessing",
+      "Catch": [
+        {
+          "ErrorEquals": ["FaceAlreadyExistsError"],
+          "ResultPath": "$.errorInfo",
+          "Next": "PhotoInvalid"
+        }
+      ]
+    },
+    "ParallelProcessing": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "AddFaceToIndex",
+          "States": {
+            "AddFaceToIndex": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:908425369328:function:wildrydes-step-module-resources-IndexFaceFunction-8O36AYKDU86B",
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "Thumbnail",
+          "States": {
+            "Thumbnail": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:908425369328:function:wildrydes-step-module-resources-ThumbnailFunction-JXW0KUE9KS88",
+              "End": true
+            }
+          }
+        }
+      ],
+      "ResultPath": "$.parallelResult",
+      "Next": "PersistMetadata"
+    },
+    "PersistMetadata": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:908425369328:function:wildrydes-step-module-reso-PersistMetadataFunction-QOPXWPCGWW0D",
+      "ResultPath": null,
+      "End": true
+    }
+  }
+}
